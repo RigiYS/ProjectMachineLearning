@@ -13,8 +13,8 @@ st.title("🎓 Student Graduation Prediction")
 # --- Baca data dari file lokal ---
 @st.cache_data
 def load_data():
-    train_df = pd.read_excel("Kelulusan Train.xlsx", engine="openpyxl")
-    test_df = pd.read_excel("Kelulusan Test.xlsx", engine="openpyxl")
+    train_df = pd.read_excel("/main/Kelulusan Train.xlsx", engine="openpyxl")
+    test_df = pd.read_excel("/main/Kelulusan Test.xlsx", engine="openpyxl")
     return train_df, test_df
 
 train_df, test_df = load_data()
