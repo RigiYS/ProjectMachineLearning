@@ -31,7 +31,7 @@ def preprocess(train, test):
     X_train = train.drop('STATUS KELULUSAN', axis=1)
 
     y_test = test['STATUS KELULUSAN']
-    X_test = test.drop('SATUS KELULUSAN', axis=1)
+    X_test = test.drop('STATUS KELULUSAN', axis=1)
 
     # Encode kolom kategorikal
     encoders = {}
