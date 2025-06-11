@@ -27,11 +27,11 @@ def preprocess(train, test):
     test = test.copy()
 
     # Pisahkan label
-    y_train = train['Graduated']
-    X_train = train.drop('Graduated', axis=1)
+    y_train = train['STATUS KELULUSAN']
+    X_train = train.drop('STATUS KELULUSAN', axis=1)
 
-    y_test = test['Graduated']
-    X_test = test.drop('Graduated', axis=1)
+    y_test = test['STATUS KELULUSAN']
+    X_test = test.drop('SATUS KELULUSAN', axis=1)
 
     # Encode kolom kategorikal
     encoders = {}
