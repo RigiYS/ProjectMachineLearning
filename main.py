@@ -4,101 +4,91 @@ import numpy as np
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
-import matplotlib.pyplot as plt
+from sklearn.metrics import classification_report, confusion_matrix
 import seaborn as sns
+import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Prediksi Kelulusan Mahasiswa", layout="wide")
-st.title("🎓 Prediksi Kelulusan Mahasiswa dengan Random Forest & XGBoost")
+st.title("🎓 Student Graduation Prediction")
 
-# Upload file
-tab1, tab2 = st.tabs(["Upload Data", "Hasil Evaluasi"])
+# --- Baca data dari file lokal ---
+@st.cache_data
+def load_data():
+    train_df = pd.read_excel("train.xlsx", engine="openpyxl")
+    test_df = pd.read_excel("test.xlsx", engine="openpyxl")
+    return train_df, test_df
 
-with tab1:
-    train_file = st.file_uploader("Upload file Train (.xls)", type=["xls", "xlsx"], key="train")
-    test_file = st.file_uploader("Upload file Test (.xls)", type=["xls", "xlsx"], key="test")
+train_df, test_df = load_data()
+st.subheader("Sample Data (Train)")
+st.dataframe(train_df.head())
 
-    if train_file and test_file:
-        train_df = pd.read_excel(train_file)
-        test_df = pd.read_excel(test_file)
+# --- Preprocessing ---
+def preprocess(train, test):
+    train = train.copy()
+    test = test.copy()
 
-        st.subheader("📄 Contoh Data Train")
-        st.dataframe(train_df.head())
+    # Pisahkan label
+    y_train = train['Graduated']
+    X_train = train.drop('Graduated', axis=1)
 
-        # Preprocessing
-        train_df.dropna(inplace=True)
-        test_df.dropna(inplace=True)
+    y_test = test['Graduated']
+    X_test = test.drop('Graduated', axis=1)
 
+    # Encode kolom kategorikal
+    encoders = {}
+    for col in X_train.select_dtypes(include='object').columns:
         le = LabelEncoder()
-        train_df['STATUS KELULUSAN'] = le.fit_transform(train_df['STATUS KELULUSAN'])
-        test_df['STATUS KELULUSAN'] = le.transform(test_df['STATUS KELULUSAN'])
+        X_train[col] = le.fit_transform(X_train[col])
+        X_test[col] = le.transform(X_test[col])
+        encoders[col] = le
 
-        for col in ['JENIS KELAMIN', 'STATUS NIKAH', 'STATUS MAHASISWA']:
-            train_df[col] = le.fit_transform(train_df[col])
-            test_df[col] = le.transform(test_df[col])
+    # Scaling
+    scaler = MinMaxScaler()
+    X_train = pd.DataFrame(scaler.fit_transform(X_train), columns=X_train.columns)
+    X_test = pd.DataFrame(scaler.transform(X_test), columns=X_test.columns)
 
-        non_features = ['STATUS KELULUSAN', 'STATUS NIKAH', 'STATUS MAHASISWA', 'JENIS KELAMIN', 'NAMA']
-        numerical_features = [col for col in train_df.columns if col not in non_features and train_df[col].dtype != 'object']
+    return X_train, y_train, X_test, y_test
 
-        scaler = MinMaxScaler()
-        train_df[numerical_features] = scaler.fit_transform(train_df[numerical_features])
-        test_df[numerical_features] = scaler.transform(test_df[numerical_features])
+X_train, y_train, X_test, y_test = preprocess(train_df, test_df)
 
-        X_train = train_df.drop(columns=non_features, errors='ignore')
-        y_train = train_df['STATUS KELULUSAN']
-        X_test = test_df.drop(columns=non_features, errors='ignore')
-        y_test = test_df['STATUS KELULUSAN']
+# --- Train & Predict ---
+if st.button("Train Models and Predict"):
+    with st.spinner("Training Random Forest and XGBoost..."):
 
-        if st.button("🔁 Jalankan Model"):
-            # Train models
-            rf = RandomForestClassifier(n_estimators=100, random_state=42)
-            rf.fit(X_train, y_train)
-            rf_preds = rf.predict(X_test)
+        rf = RandomForestClassifier()
+        rf.fit(X_train, y_train)
+        rf_pred = rf.predict(X_test)
 
-            xgb = XGBClassifier(eval_metric='logloss', random_state=42)
-            xgb.fit(X_train, y_train)
-            xgb_preds = xgb.predict(X_test)
+        xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss')
+        xgb.fit(X_train, y_train)
+        xgb_pred = xgb.predict(X_test)
 
-            # Evaluasi model
-            def evaluate_model(y_true, y_pred, model_name):
-                cm = confusion_matrix(y_true, y_pred)
-                tn, fp, fn, tp = cm.ravel()
-                acc = accuracy_score(y_true, y_pred)
-                prec = precision_score(y_true, y_pred)
-                rec = recall_score(y_true, y_pred)
-                spec = tn / (tn + fp)
-                f1 = f1_score(y_true, y_pred)
+    st.success("✅ Model Trained Successfully")
 
-                st.subheader(f"📊 Evaluasi Model: {model_name}")
-                st.write(f"- Accuracy: {acc:.4f}")
-                st.write(f"- Precision: {prec:.4f}")
-                st.write(f"- Recall: {rec:.4f}")
-                st.write(f"- Specificity: {spec:.4f}")
-                st.write(f"- F1 Score: {f1:.4f}")
+    # --- Evaluation ---
+    st.subheader("🎯 Evaluation Results")
 
-                fig, ax = plt.subplots()
-                sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
-                ax.set_title(f"Confusion Matrix: {model_name}")
-                ax.set_xlabel("Predicted")
-                ax.set_ylabel("Actual")
-                st.pyplot(fig)
+    st.markdown("**Random Forest Report**")
+    st.text(classification_report(y_test, rf_pred))
 
-            with tab2:
-                evaluate_model(y_test, rf_preds, "Random Forest")
-                evaluate_model(y_test, xgb_preds, "XGBoost")
+    st.markdown("**XGBoost Report**")
+    st.text(classification_report(y_test, xgb_pred))
 
-                st.subheader("📌 Feature Importance")
-                importances_rf = pd.Series(rf.feature_importances_, index=X_train.columns).sort_values(ascending=False)
-                importances_xgb = pd.Series(xgb.feature_importances_, index=X_train.columns).sort_values(ascending=False)
+    # --- Confusion Matrix ---
+    cm = confusion_matrix(y_test, xgb_pred)
+    fig, ax = plt.subplots()
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
+    ax.set_title("XGBoost Confusion Matrix")
+    st.pyplot(fig)
 
-                fig1, ax1 = plt.subplots()
-                importances_rf.plot(kind='bar', ax=ax1)
-                ax1.set_title("Feature Importance - Random Forest")
-                st.pyplot(fig1)
+    # --- Feature Importance ---
+    st.subheader("🔍 XGBoost Feature Importance")
+    importance = xgb.feature_importances_
+    importance_df = pd.DataFrame({
+        'Feature': X_train.columns,
+        'Importance': importance
+    }).sort_values(by='Importance', ascending=False)
+    st.dataframe(importance_df)
 
-                fig2, ax2 = plt.subplots()
-                importances_xgb.plot(kind='bar', ax=ax2)
-                ax2.set_title("Feature Importance - XGBoost")
-                st.pyplot(fig2)
-    else:
-        st.info("Silakan upload kedua file terlebih dahulu.")
+    fig2, ax2 = plt.subplots()
+    sns.barplot(x='Importance', y='Feature', data=importance_df, ax=ax2)
+    st.pyplot(fig2)
